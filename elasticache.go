@@ -19,24 +19,9 @@ type Node struct {
 	Port int
 }
 
-// Item embeds the memcache client's type of the same name
-type Item memcache.Item
-
 // Client embeds the memcache client so we can hide those details away
 type Client struct {
 	*memcache.Client
-}
-
-// Set abstracts the memcache client details away,
-// by copying over the values provided by the user into the Set method,
-// as coercing the custom Item type to the required memcache.Item type isn't possible.
-// Downside is if memcache client fields ever change, it'll introduce a break
-func (c *Client) Set(item *Item) error {
-	return c.Client.Set(&memcache.Item{
-		Key:        item.Key,
-		Value:      item.Value,
-		Expiration: item.Expiration,
-	})
 }
 
 // New takes an elasticache configuration endpoint and returns an instance of the memcache client.
