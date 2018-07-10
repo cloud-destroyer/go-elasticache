@@ -2,11 +2,9 @@ package elasticache
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 
@@ -41,9 +39,9 @@ func (c *Client) Set(item *Item) error {
 	})
 }
 
-// New returns an instance of the memcache client
-func New() (*Client, error) {
-	urls, err := clusterNodes()
+// New takes an elasticache configuration endpoint and returns an instance of the memcache client.
+func New(endpoint string) (*Client, error) {
+	urls, err := clusterNodes(endpoint)
 	if err != nil {
 		return &Client{Client: memcache.New()}, err
 	}
@@ -51,12 +49,7 @@ func New() (*Client, error) {
 	return &Client{Client: memcache.New(urls...)}, nil
 }
 
-func clusterNodes() ([]string, error) {
-	endpoint, err := elasticache()
-	if err != nil {
-		return nil, err
-	}
-
+func clusterNodes(endpoint string) ([]string, error) {
 	conn, err := net.Dial("tcp", endpoint)
 	if err != nil {
 		return nil, err
@@ -77,17 +70,6 @@ func clusterNodes() ([]string, error) {
 	}
 
 	return urls, nil
-}
-
-func elasticache() (string, error) {
-	var endpoint string
-
-	endpoint = os.Getenv("ELASTICACHE_ENDPOINT")
-	if len(endpoint) == 0 {
-		return "", errors.New("ElastiCache endpoint not set")
-	}
-
-	return endpoint, nil
 }
 
 func parseNodes(conn io.Reader) (string, error) {

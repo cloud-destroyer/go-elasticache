@@ -2,19 +2,8 @@ package elasticache
 
 import (
 	"bytes"
-	"os"
 	"testing"
 )
-
-func TestElastiCacheEndpoint(t *testing.T) {
-	expectation := "foo"
-	os.Setenv("ELASTICACHE_ENDPOINT", expectation)
-	response, _ := elasticache()
-
-	if response != expectation {
-		t.Errorf("The response '%s' didn't match the expectation '%s'", response, expectation)
-	}
-}
 
 func TestParseNodes(t *testing.T) {
 	expectation := "localhost|127.0.0.1|11211"
