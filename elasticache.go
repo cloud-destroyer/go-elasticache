@@ -2,36 +2,65 @@ package elasticache
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
 )
 
-// Node is a single ElastiCache node
-type Node struct {
-	URL  string
-	Host string
-	IP   string
-	Port int
-}
-
-// Client embeds the memcache client so we can hide those details away
+// Client is an Elasticache-aware memcache client
 type Client struct {
 	*memcache.Client
+	// Custom ServerList so we can replace endpoints automatically at runtime
+	ServerList *memcache.ServerList
+	// Elasticache config endpoint
+	Endpoint string
 }
 
-// New takes an elasticache configuration endpoint and returns an instance of the memcache client.
+// Watch polls the Elasticache endpoint every 60 seconds to update cluster endpoints.
+// It can be stopped by calling ctx.Done()
+func (c *Client) Watch(ctx context.Context) {
+	t := time.NewTicker(1 * time.Minute)
+	for {
+		select {
+		case <-t.C:
+			urls, err := clusterNodes(c.Endpoint)
+			if err != nil {
+				continue
+			}
+
+			c.ServerList.SetServers(urls...)
+		case <-ctx.Done():
+			t.Stop()
+			return
+		}
+	}
+}
+
+// New takes an Elasticache configuration endpoint and returns an instance of the memcache client.
 func New(endpoint string) (*Client, error) {
-	urls, err := clusterNodes(endpoint)
+	servers, err := clusterNodes(endpoint)
 	if err != nil {
-		return &Client{Client: memcache.New()}, err
+		return nil, err
 	}
 
-	return &Client{Client: memcache.New(urls...)}, nil
+	ss := new(memcache.ServerList)
+	if err := ss.SetServers(servers...); err != nil {
+		return nil, err
+	}
+
+	client := &Client{
+		Client:     memcache.NewFromSelector(ss),
+		ServerList: ss,
+		Endpoint:   endpoint,
+	}
+
+	return client, nil
 }
 
 func clusterNodes(endpoint string) ([]string, error) {
@@ -83,21 +112,15 @@ func parseNodes(conn io.Reader) (string, error) {
 
 func parseURLs(response string) ([]string, error) {
 	var urls []string
-	var nodes []Node
 
-	items := strings.Split(response, " ")
-
-	for _, v := range items {
+	for _, v := range strings.Split(response, " ") {
 		fields := strings.Split(v, "|") // ["host", "ip", "port"]
 
 		port, err := strconv.Atoi(fields[2])
 		if err != nil {
 			return nil, err
 		}
-
-		node := Node{fmt.Sprintf("%s:%d", fields[1], port), fields[0], fields[1], port}
-		nodes = append(nodes, node)
-		urls = append(urls, node.URL)
+		urls = append(urls, fmt.Sprintf("%s:%d", fields[1], port))
 	}
 
 	return urls, nil

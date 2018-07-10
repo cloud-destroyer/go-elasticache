@@ -1,70 +1,25 @@
-<h1 align="center">go-elasticache</h1>
+# go-elasticache
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Completed-100%25-green.svg?style=flat-square">
-</p>
+This is a fork of [Integralist/go-elasticache](https://github.com/Integralist/go-elasticache) with a few changes and additions:
 
-<p align="center">
-  Thin abstraction over the Memcache client package <a href="https://github.com/bradfitz/gomemcache">gomemcache</a><br>
-  allowing it to support <a href="https://aws.amazon.com/elasticache/">AWS ElastiCache</a> cluster nodes
-</p>
+- [Watcher support](#auto-detect-cluster-changes) for detecting and applying server changes.
+- Removed logging and reliance on environment variables.
+- Remove unnecessary `Node` and `Item` types.
+- Replaced `glide` with `dep` as dependency manager.
+- Moved package to `go-elasticache` instead of `go-elasticache/elasticache`.
 
-## Explanation
+## Auto Detect Cluster Changes
 
-When using the memcache client [gomemcache](https://github.com/bradfitz/gomemcache) you typically call a constructor and pass it a list of memcache nodes like so:
-
-```go
-mc := memcache.New("10.0.0.1:11211", "10.0.0.2:11211", "10.0.0.3:11212")
-```
-
-But when using the [AWS ElastiCache](https://aws.amazon.com/elasticache/) service you need to query a particular internal endpoint via a socket connection and manually parse out the details of the available cluster.
-
-In Ruby it seems most Memcache clients are setup to handle this for you, but in Go that doesn't appear to be the case. Hence I've created this package as a thin abstraction layer on top of the gomemcache package.
-
-## Example
-
-Below is an example of how to use this package. 
-
-To run it locally you will need the following dependencies installed and running:
-
-- Memcache (e.g. `docker run -d -p 11211:11211 memcached`)
-- [fake_elasticache](https://github.com/stevenjack/fake_elasticache) (e.g. `gem install fake_elasticache && fake_elasticache`)
+You can use the `Watch` method to detect changes in cluster configuration. The client is updated automatically when changes are detected.
 
 ```go
-package main
+// Make sure the endpoint has ".cfg" in it!
+client, _ := elasticache.New("mycluster.fnjyzo.cfg.use1.cache.amazonaws.com")
 
-import (
-	"fmt"
-	"log"
+ctx := context.WithCancel(context.Background())
+defer cancel() // Call cancel when you are done with the memcache client
 
-	"github.com/integralist/go-elasticache/elasticache"
-)
-
-func main() {
-	mc, err := elasticache.New()
-	if err != nil {
-		log.Fatalf("Error: %s", err.Error())
-	}
-
-	if err := mc.Set(&elasticache.Item{Key: "foo", Value: []byte("my value")}); err != nil {
-		log.Println(err.Error())
-	}
-
-	it, err := mc.Get("foo")
-	if err != nil {
-		log.Println(err.Error())
-		return
-	}
-
-	fmt.Printf("%+v", it) 
-  // &{Key:foo Value:[109 121 32 118 97 108 117 101] Flags:0 Expiration:0 casid:9}
-}
+go client.Watch(ctx)
 ```
 
-> Note: when running in production make sure to set the environment variable `ELASTICACHE_ENDPOINT`
-
-## Licence
-
-[The MIT License (MIT)](http://opensource.org/licenses/MIT)
-
-Copyright (c) 2016 [Mark McDonnell](http://twitter.com/integralist)
+See [Elasticache Auto Discovery](https://docs.aws.amazon.com/AmazonElastiCache/latest/mem-ug/AutoDiscovery.html) docs for details.
