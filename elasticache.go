@@ -5,14 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/integralist/go-findroot/find"
 )
 
 // Node is a single ElastiCache node
@@ -43,28 +41,6 @@ func (c *Client) Set(item *Item) error {
 	})
 }
 
-var logger *log.Logger
-
-func init() {
-	logger = log.New(os.Stdout, "go-elasticache: ", log.Ldate|log.Ltime|log.Lshortfile)
-
-	if env := os.Getenv("APP_ENV"); env == "test" {
-		root, err := find.Repo()
-		if err != nil {
-			log.Printf("Repo Error: %s", err.Error())
-		}
-
-		path := fmt.Sprintf("%s/go-elasticache.log", root.Path)
-
-		file, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
-		if err != nil {
-			log.Printf("Open File Error: %s", err.Error())
-		}
-
-		logger = log.New(file, "go-elasticache: ", log.Ldate|log.Ltime|log.Lshortfile)
-	}
-}
-
 // New returns an instance of the memcache client
 func New() (*Client, error) {
 	urls, err := clusterNodes()
@@ -83,7 +59,6 @@ func clusterNodes() ([]string, error) {
 
 	conn, err := net.Dial("tcp", endpoint)
 	if err != nil {
-		logger.Printf("Socket Dial (%s): %s", endpoint, err.Error())
 		return nil, err
 	}
 	defer conn.Close()
@@ -109,7 +84,6 @@ func elasticache() (string, error) {
 
 	endpoint = os.Getenv("ELASTICACHE_ENDPOINT")
 	if len(endpoint) == 0 {
-		logger.Println("ElastiCache endpoint not set")
 		return "", errors.New("ElastiCache endpoint not set")
 	}
 
@@ -134,11 +108,9 @@ func parseNodes(conn io.Reader) (string, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		logger.Println("Scanner: ", err.Error())
 		return "", err
 	}
 
-	logger.Println("ElastiCache nodes found: ", response)
 	return response, nil
 }
 
@@ -153,15 +125,12 @@ func parseURLs(response string) ([]string, error) {
 
 		port, err := strconv.Atoi(fields[2])
 		if err != nil {
-			logger.Println("Integer conversion: ", err.Error())
 			return nil, err
 		}
 
 		node := Node{fmt.Sprintf("%s:%d", fields[1], port), fields[0], fields[1], port}
 		nodes = append(nodes, node)
 		urls = append(urls, node.URL)
-
-		logger.Printf("Host: %s, IP: %s, Port: %d, URL: %s", node.Host, node.IP, node.Port, node.URL)
 	}
 
 	return urls, nil
